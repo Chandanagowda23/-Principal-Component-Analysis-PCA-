@@ -1,0 +1,303 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+We will study UK Smoking Data (`smoking.R`, `smoking.rda` or `smoking.csv`):
+
+**Description**
+
+Survey data on smoking habits from the UK. The data set can be used for analyzing the demographic characteristics of smokers and types of tobacco consumed.
+
+**Format**
+
+A data frame with 1691 observations on the following 12 variables.
+
+`gender` - Gender with levels Female and Male.
+
+`age` - Age.
+
+`marital_status` - Marital status with levels Divorced, Married, Separated, Single and Widowed.
+
+`highest_qualification` - Highest education level with levels A Levels, Degree, GCSE/CSE, GCSE/O Level, Higher/Sub Degree, No Qualification, ONC/BTEC and Other/Sub Degree
+
+`nationality` - Nationality with levels British, English, Irish, Scottish, Welsh, Other, Refused and Unknown.
+
+`ethnicity` - Ethnicity with levels Asian, Black, Chinese, Mixed, White and Refused Unknown.
+
+`gross_income` - Gross income with levels Under 2,600, 2,600 to 5,200, 5,200 to 10,400, 10,400 to 15,600, 15,600 to 20,800, 20,800 to 28,600, 28,600 to 36,400, Above 36,400, Refused and Unknown.
+
+`region` - Region with levels London, Midlands & East Anglia, Scotland, South East, South West, The North and Wales
+
+`smoke` - Smoking status with levels No and Yes
+
+`amt_weekends` - Number of cigarettes smoked per day on weekends.
+
+`amt_weekdays` - Number of cigarettes smoked per day on weekdays.
+
+`type` - Type of cigarettes smoked with levels Packets, Hand-Rolled, Both/Mainly Packets and Both/Mainly Hand-Rolled
+
+Source
+National STEM Centre, Large Datasets from stats4schools, <https://www.stem.org.uk/resources/elibrary/resource/28452/large-datasets-stats4schools>.
+
+Obtained from <https://www.openintro.org/data/index.php?data=smoking>
+
+## Read and Clean the Data
+
+> hint: take a look at source or load functions
+>       there is also smoking.csv file for a refference
+
+```{r}
+source("smoking.R")
+```
+
+
+```{r setup, results="hide", warning=F, message=F}
+# load libraries
+library(tibble)
+library(readr)
+library(dplyr)
+library(broom)
+library(ggplot2)
+library(ggbiplot)
+library(fastDummies)
+library(plotly)
+```
+
+```{r}
+# Load data
+data1 = data.frame(source("smoking.R"))
+```
+
+Take a look into data
+```{r}
+head(data1)
+```
+
+There are many fields there so for this exercise lets only concentrate on 
+smoke, gender, age, marital_status, highest_qualification and gross_income.
+
+Create new data.frame with only these columns.
+
+```{r}
+data2 = data1[, c("value.smoke", "value.gender", "value.age", "value.marital_status", "value.highest_qualification", "value.gross_income")]
+```
+
+
+```{r}
+data3 = na.omit(data2)
+```
+
+
+```{r}
+unique(data3$value.marital_status)
+unique(data3$value.gross_income)
+unique(data3$value.highest_qualification)
+```
+
+
+```{r}
+data3$value.gender = as.numeric(data3$value.gender == "Female")
+data3$value.smoke = as.numeric(data3$value.smoke == "No")
+data3 = data3 %>%
+  mutate(
+    value.highest_qualification = case_when(
+      value.highest_qualification == "No Qualification" ~ 1,
+      value.highest_qualification == "GCSE/O Level" ~ 2,
+      value.highest_qualification == "GCSE/CSE" ~ 3,
+      value.highest_qualification == "Other/Sub Degree" ~ 4,
+      value.highest_qualification == "Higher/Sub Degree" ~ 5,
+      value.highest_qualification == "ONC/BTEC" ~ 6,
+      value.highest_qualification ==  "A Levels" ~ 7,
+      value.highest_qualification == "Degree" ~ 8,
+      TRUE ~ NA
+    )
+  )
+
+data3 = data3 %>%
+  mutate(
+    value.gross_income = case_when(
+      grepl("^Unknown", value.gross_income) ~ 1,
+      grepl("^Under", value.gross_income) ~ 2,
+      grepl("^2,600 to 5,200", value.gross_income) ~ 3,
+      grepl("^5,200 to 10,400", value.gross_income) ~ 4,
+      grepl("^10,400 to 15,600", value.gross_income) ~ 5,
+      grepl("^15,600 to 20,800", value.gross_income) ~ 6,
+      grepl("^28,600 to 36,400", value.gross_income) ~ 7,
+      grepl("^Above", value.gross_income) ~ 8,
+      grepl("^Refused", value.gross_income) ~ 9,
+      grepl("^20,800 to 28,600", value.gross_income) ~ 10,
+      TRUE ~ NA_integer_
+    )
+  )
+data4 = dummy_cols(data3, select_columns = 'value.marital_status')
+```
+
+
+PCA on all columns except smoking status
+```{r}
+data5 = data4 %>%select(-value.smoke, -value.marital_status, -value.marital_status_Married)
+pca_analysis = prcomp(data5, scale = T)
+summary(pca_analysis)
+plot(pca_analysis)
+```
+
+scree plot 
+
+```{r}
+pr.var = pca_analysis$sdev^2
+pve = 100 * pr.var / sum(pr.var)
+par(mfrow = c(1, 2))
+plot(pve, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained",
+    type = "b")
+plot(cumsum(pve), xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+```
+6- elbow method choice.
+
+We have 8 PCA from which we can decide how many captures the most variance in data.
+By elbow method, we can decide the 6PCA will be good choice. Retaining the information and reducing the dimensionality.
+But if we have to capture 90+% of variance then we have to keep till PC7 which again depends on the situation and needs. Here, pc1 - pc6 will be a good choice as it covers 88% of data variance.
+
+
+biplot color points by smoking field
+
+```{r}
+# biplot without smoking field
+ggbiplot(pca_analysis, scale = 0, labels=rownames(pca_analysis$x))
+```
+
+```{r}
+ggbiplot(pca_analysis, scale = 0, labels=rownames(pca_analysis$x), groups = data3$value.smoke)
+```
+
+The principle component analysis (PCA) observed biplot explains on the connections between the original variables and the principal components.Here we have 8 PCA and 8  features builds this biplot explaining us the contributions to each PC by examining the arrows that represent those features.
+
+Notably, PC1 and PC2 seem to be the most significant factors, as shown by the long arrows connected to the values of "value.age," "value.gender," and "value.marital_status_Single" for PC1 and "value.gross_income" and "value.marital_status_Separated" for PC2, respectively.
+
+Closely grouped data points around these arrows imply that specific subsets of the dataset have shared traits relating to these key factors. who are older and have never been married may group together.
+
+Additionally, the division of observations along PC1 and PC2 raises the possibility of a possible differentiation in the data depending on elements like age and marital status. 'value.highest_qualification' stands out as a significant contribution to PC3, whereas PC4 is less significant but still helps to comprehend the data structure.
+
+Finally, I can conclude the disussion by saying the gender, marital is not correlated with the gross income, while they both are correlated eliminating one doesn't matter in this context. Whereas considering age and as well as the widow is interestingly highly correlated from the biplot which has been plotted and it is in the same direction as in PCA1 where 26% of variance is being explained.
+
+we cannot use first two PC to discriminate between smoking as I can see from the first two PCs that the data based on smoke is not accurately categorised. The biplot generated using the first two PCs shows the contribution of the initial factors to these PCs. The scores on the first two PCs determine the locations of the dots in the scatter plot, each of which represents an observation. It was also possible to qualitatively assess if the first two PCs can discriminate between smokers and non-smokers by colouring the scatter plot points according to whether or not they are smokers.And also, the contrubution of first 2 pc is just 41%
+
+
+```{r}
+unique(data3$value.marital_status)
+data3$value.marital_status = factor(data3$value.marital_status, levels = unique(data3$value.marital_status), labels = c(4L, 2L, 1L, 5L, 3L), ordered = TRUE)
+```
+
+                                     
+```{r}
+data3$value.highest_qualification = as.numeric(data3$value.highest_qualification)
+data3$value.marital_status= as.numeric(data3$value.marital_status)
+sapply(data3,class)
+```
+
+
+```{r}
+data_revisit <- data3 %>%select(-value.smoke)
+pca_analysis <- prcomp(data_revisit, scale = T)
+summary(pca_analysis)
+plot(pca_analysis)
+```
+
+
+skee plot
+
+```{r}
+
+pr.var = pca_analysis$sdev^2
+pve <- 100 * pr.var / sum(pr.var)
+par(mfrow = c(1, 2))
+plot(pve, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained",
+    type = "b")
+plot(cumsum(pve), xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+```
+biplot
+```{r}
+ggbiplot(pca_analysis, scale = 0, groups = data3$value.smoke)
+```
+
+#With the change made using marital column as a ordinal feature with respect to smoking grouping I guess we can see good changes and also, the pc1 and pc2 contrubute 59% of total variance in data.With this changes lesser PC analysis and less features explains the same contrubution.
+
+
+Get the data set from your final project (or find something suitable). The data set should have at least four variables and it shouldn't be used in class PCA examples: iris, mpg, diamonds and so on).
+
+* Convert a columns to proper format (9 points)
+* Perform PCA (3 points)
+* Make a skree plot (3 points)
+* Make a biplot (3 points)
+* Discuss your observations (9 points)
+
+
+```{r}
+data.loan = read.csv("loan_train.csv")
+```
+
+```{r}
+head(data.loan)
+```
+
+```{r}
+data.loan1 <- data.loan[,c("Gender", "Married", "Education","Self_Employed","Applicant_Income", "Loan_Amount","Area","Status")]
+```
+```{r}
+str(data.loan1)
+```
+
+#* Convert a columns to proper format (9 points)
+#PRE-PROCESSING
+#Converting the gender and married status to numeric
+```{r}
+data.loan1$Gender <- as.numeric(data.loan1$Gender == "Male")
+data.loan1$Married <- as.numeric(data.loan1$Married == "Yes")
+data.loan1$Education <- as.numeric(data.loan1$Education == "Graduate")
+data.loan1$Self_Employed <- as.numeric(data.loan1$Self_Employed == "Yes")
+data.loan1$Status <- as.numeric(data.loan1$Status == "Y")
+```
+
+
+```{r}
+data.loan1$Area = factor(data.loan1$Area, levels = unique(data.loan1$Area), labels = c(3L, 1L, 2L), ordered = TRUE)
+```
+
+```{r}
+data.loan1$Area = as.numeric(data.loan1$Area)
+sapply(data.loan1, class)
+```
+```{r}
+pca_analysis <- prcomp(data.loan1, scale = T)
+summary(pca_analysis)
+plot(pca_analysis)
+```
+
+
+#* Make a skree plot (3 points)
+
+```{r}
+pr.var = pca_analysis$sdev^2
+pve <- 100 * pr.var / sum(pr.var)
+par(mfrow = c(1, 2))
+plot(pve, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained",
+    type = "b")
+plot(cumsum(pve), xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+```
+
+
+```{r}
+ggbiplot(pca_analysis, scale = 0, labels=rownames(pca_analysis$x))
+```
+
